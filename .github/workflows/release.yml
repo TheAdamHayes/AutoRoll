@@ -1,0 +1,97 @@
+name: Release
+
+# Bump "version" in module.json and push to main. That's it.
+# If no GitHub release exists for that version yet, this builds module.zip,
+# creates the release (tag v<version>), and optionally publishes it to the
+# Foundry package listing.
+
+on:
+  push:
+    branches: [main]
+    paths: [module.json]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      FOUNDRY_RELEASE_TOKEN: ${{ secrets.FOUNDRY_RELEASE_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read module.json
+        id: meta
+        run: |
+          VERSION=$(jq -r '.version' module.json)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "id=$(jq -r '.id' module.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether this version is already released
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${{ steps.meta.outputs.tag }}" --repo "${{ github.repository }}" > /dev/null 2>&1; then
+            echo "Release ${{ steps.meta.outputs.tag }} already exists, nothing to do."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Stamp URLs into module.json
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          REPO_URL="https://github.com/${{ github.repository }}"
+          TAG="${{ steps.meta.outputs.tag }}"
+          jq --arg url "$REPO_URL" \
+             --arg manifest "$REPO_URL/releases/latest/download/module.json" \
+             --arg download "$REPO_URL/releases/download/$TAG/module.zip" \
+             --arg bugs "$REPO_URL/issues" \
+             '.url = $url | .manifest = $manifest | .download = $download | .bugs = $bugs' \
+             module.json > module.tmp.json
+          mv module.tmp.json module.json
+          cat module.json
+
+      - name: Build module.zip
+        if: steps.check.outputs.exists == 'false'
+        run: zip -r module.zip module.json scripts lang README.md LICENSE
+
+      - name: Create GitHub release
+        if: steps.check.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          make_latest: true
+          files: |
+            module.json
+            module.zip
+
+      # Optional: only runs once you add a FOUNDRY_RELEASE_TOKEN repo secret.
+      # The package must already exist on foundryvtt.com (you create the listing once by hand).
+      - name: Publish to Foundry package listing
+        if: steps.check.outputs.exists == 'false' && env.FOUNDRY_RELEASE_TOKEN != ''
+        run: |
+          REPO_URL="https://github.com/${{ github.repository }}"
+          TAG="${{ steps.meta.outputs.tag }}"
+          PAYLOAD=$(jq -n \
+            --arg id "${{ steps.meta.outputs.id }}" \
+            --arg version "${{ steps.meta.outputs.version }}" \
+            --arg manifest "$REPO_URL/releases/download/$TAG/module.json" \
+            --arg notes "$REPO_URL/releases/tag/$TAG" \
+            --argjson compat "$(jq '.compatibility' module.json)" \
+            '{id: $id, "dry-run": false, release: {version: $version, manifest: $manifest, notes: $notes, compatibility: $compat}}')
+          echo "$PAYLOAD"
+          RESPONSE=$(curl -sS -X POST "https://api.foundryvtt.com/_api/packages/release_version/" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: $FOUNDRY_RELEASE_TOKEN" \
+            -d "$PAYLOAD")
+          echo "$RESPONSE"
+          echo "$RESPONSE" | jq -e '.status == "success"' > /dev/null

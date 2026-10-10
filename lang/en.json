@@ -1,0 +1,15 @@
+{
+  "dnd5e-attack-damage-qol": {
+    "Settings": {
+      "Mode": {
+        "Name": "Damage After Attack",
+        "Hint": "What happens after you make an attack roll, whether it hits or misses. Damage is never applied automatically; use the normal apply buttons on the damage card. This setting only affects you.",
+        "Choices": {
+          "Off": "Off (default dnd5e behaviour)",
+          "Prompt": "Open the damage roll dialog",
+          "Auto": "Roll damage automatically (don't apply)"
+        }
+      }
+    }
+  }
+}
