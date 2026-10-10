@@ -26,29 +26,6 @@ This is a **client** setting, so each player (and the GM) chooses their own.
 - Foundry VTT v13 – v14
 - dnd5e system 5.3.x
 
-## Installation
-
-Paste this manifest URL into Foundry's *Install Module* dialog:
-
-```
-https://github.com/OWNER/REPO/releases/latest/download/module.json
-```
-
-## Releasing (for the maintainer)
-
-1. Bump `"version"` in `module.json` (e.g. `1.0.0` → `1.0.1`).
-2. Commit and push to `main`.
-
-The GitHub Action builds `module.zip`, creates release `v1.0.1`, and Foundry will offer the update. Pushing without changing the version does nothing.
-
-### Publishing to the Foundry package listing (optional)
-
-1. Create the package listing once on foundryvtt.com (the package id must be `dnd5e-attack-damage-qol`).
-2. Copy the **Package Release Token** from the listing's edit page.
-3. In GitHub: *Settings → Secrets and variables → Actions → New repository secret*, name it `FOUNDRY_RELEASE_TOKEN`.
-
-From then on every release is also pushed to the Foundry listing automatically.
-
 ## License
 
 MIT
